@@ -1,0 +1,29 @@
+{
+  "model": "Pooled LightGBM",
+  "purpose": "Lead time demand forecasting",
+  "features": [
+    "lag_1",
+    "lag_7",
+    "lag_14",
+    "roll_mean_7",
+    "roll_mean_14",
+    "roll_mean_28",
+    "roll_std_7",
+    "roll_std_14",
+    "roll_std_28",
+    "trend_ratio_14_28",
+    "day_of_week",
+    "lead_time_days",
+    "category_code"
+  ],
+  "best_params": {
+    "n_estimators": 200,
+    "learning_rate": 0.03,
+    "num_leaves": 15,
+    "min_child_samples": 20
+  },
+  "test_period_start": "2026-04-30",
+  "test_period_end": "2026-06-26",
+  "test_wape": 0.06519761518494868,
+  "fallback": "Weekday adjusted 28 day moving average"
+}
