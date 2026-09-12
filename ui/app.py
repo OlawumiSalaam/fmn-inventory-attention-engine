@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
-from dash import Dash, Input, Output, dcc, html
+from dash import (
+    Dash,
+    Input,
+    Output,
+    dcc,
+    html,
+)
 
 from ui.layout import app_shell
+from ui.pages.ask_data import layout as ask_data_layout
 from ui.pages.attention import layout as attention_layout
+from ui.pages.sku_analysis import layout as sku_analysis_layout
+from ui.pages.validation import layout as validation_layout
+
 
 app = Dash(
     __name__,
@@ -14,14 +24,29 @@ app = Dash(
 )
 
 
-def placeholder_page(title: str, description: str) -> html.Div:
-    """Build a temporary page placeholder for later implementation milestones."""
+def placeholder_page(
+    title: str,
+    description: str,
+) -> html.Div:
+    """Build a temporary page placeholder."""
     return html.Div(
         [
-            html.Div("FMN Inventory Attention Engine", className="page-eyebrow"),
-            html.H1(title, className="page-title"),
-            html.P(description, className="page-subtitle"),
-            html.Div("This workspace will be implemented in the next milestone.", className="placeholder-card"),
+            html.Div(
+                title,
+                className="page-eyebrow",
+            ),
+            html.H1(
+                title,
+                className="page-title",
+            ),
+            html.P(
+                description,
+                className="page-subtitle",
+            ),
+            html.Div(
+                "This workspace will be implemented in the next milestone.",
+                className="placeholder-card",
+            ),
         ],
         className="page-content",
     )
@@ -29,28 +54,53 @@ def placeholder_page(title: str, description: str) -> html.Div:
 
 app.layout = html.Div(
     [
-        dcc.Location(id="url", refresh=False),
-        html.Div(id="page-container"),
+        dcc.Location(
+            id="url",
+            refresh=False,
+        ),
+        html.Div(
+            id="page-container",
+        ),
     ]
 )
 
 
 @app.callback(
-    Output("page-container", "children"),
-    Input("url", "pathname"),
+    Output(
+        "page-container",
+        "children",
+    ),
+    Input(
+        "url",
+        "pathname",
+    ),
 )
-def render_page(pathname: str | None) -> html.Div:
-    """Render the requested workspace inside the persistent application shell."""
-    if pathname in (None, "/", ""):
+def render_page(
+    pathname: str | None,
+) -> html.Div:
+    """Render the requested workspace inside the application shell."""
+    if pathname in (
+        None,
+        "/",
+        "",
+    ):
         page = attention_layout()
+
     elif pathname == "/sku":
-        page = placeholder_page("SKU Analysis", "Investigate the evidence behind an individual SKU assessment.")
+        page = sku_analysis_layout()
+
     elif pathname == "/validation":
-        page = placeholder_page("Validation", "Review forecast and risk decision validation evidence.")
+        page = validation_layout()
+
     elif pathname == "/ask":
-        page = placeholder_page("Ask the Data", "Ask grounded questions about the current inventory position.")
+        page = ask_data_layout()
+
     else:
-        page = placeholder_page("Page not found", "The requested workspace does not exist.")
+        page = placeholder_page(
+            "Page not found",
+            "The requested workspace does not exist.",
+        )
+
     return app_shell(page)
 
 
@@ -58,4 +108,8 @@ server = app.server
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="127.0.0.1", port=8050)
+    app.run(
+        debug=True,
+        host="127.0.0.1",
+        port=8050,
+    )

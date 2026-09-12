@@ -149,7 +149,13 @@ COLUMN_DEFS = [
         "headerTooltip": "Current stock cover / lead time",
     },
     {"field": "delivery", "headerName": "Delivery", "width": 125},
-    {"field": "shortage_display", "headerName": "Impact", "width": 115, "type": "rightAligned"},
+   {
+    "field": "shortage_display",
+    "headerName": "Projected impact",
+    "width": 135,
+    "type": "rightAligned",
+    "headerTooltip": "Projected shortage, protection, zero stock, or excess inventory.",
+    },
     {
         "field": "reason",
         "headerName": "Why",
@@ -234,6 +240,7 @@ def layout() -> html.Div:
                     "paginationPageSize": 10,
                     "animateRows": False,
                     "suppressCellFocus": True,
+                    "rowSelection": "single",
                     "getRowId": {"function": "params.data.sku_id"},
                 },
                 className="attention-grid",
@@ -305,46 +312,202 @@ def update_attention_queue(
 
 @callback(
     Output("selection-panel", "children"),
-    Input("attention-grid", "cellClicked"),
+    Input("attention-grid", "selectedRows"),
 )
-def show_selected_sku(cell: dict[str, Any] | None) -> html.Div:
-    """Show a compact investigation prompt for the SKU whose row was clicked."""
-    if not cell or not cell.get("data"):
+def show_selected_sku(rows: list[dict[str, Any]] | None) -> html.Div:
+    """Load and display the full deterministic assessment for the selected SKU."""
+    if not rows:
         return html.Div(
             [
                 html.Strong("Select a SKU to investigate"),
-                html.Span(" Click a row in the attention queue to inspect its evidence.", className="selection-help"),
+                html.Span(
+                    " Click a row in the attention queue to inspect its evidence.",
+                    className="selection-help",
+                ),
             ],
             className="selection-empty",
         )
 
-    row = cell.get("data", {})
+    row = rows[0]
+    sku_id = str(row.get("sku_id", ""))
+
+    if not sku_id:
+        return html.Div(
+            [
+                html.Strong("Unable to load SKU"),
+                html.Span(
+                    " The selected row does not contain a valid SKU identifier.",
+                    className="selection-help",
+                ),
+            ],
+            className="selection-empty",
+        )
+
+    try:
+        assessment = api_client.get_sku(sku_id)
+    except requests.RequestException:
+        return html.Div(
+            [
+                html.Strong(f"{sku_id}"),
+                html.P(
+                    "The SKU assessment could not be loaded. "
+                    "Please check that the API is running and try again."
+                ),
+            ],
+            className="selection-card selection-error",
+        )
+
+    risk = str(assessment.get("risk_state") or "Unknown")
+    priority = str(assessment.get("attention_priority") or "—")
+    sku_type = str(assessment.get("sku_type") or "—")
+
+    current_stock = _format_stock(assessment.get("current_stock"))
+    coverage = _format_days(assessment.get("coverage_days"))
+    lead_time = assessment.get("lead_time_days")
+    lead_display = f"{float(lead_time):.0f}d" if lead_time is not None else "—"
+
+    delivery = _delivery(assessment)
+
+    projected_shortage = assessment.get("projected_unmet_units")
+    if projected_shortage is not None and float(projected_shortage) > 0:
+        impact = f"{float(projected_shortage):,.0f} units short"
+    elif risk == "Overstock":
+        minimum_stock = assessment.get("minimum_projected_stock")
+        impact = (
+            f"{float(minimum_stock):,.0f} units excess"
+            if minimum_stock is not None and float(minimum_stock) > 0
+            else "Excess inventory"
+        )
+    elif risk == "Watch":
+        impact = "Projected gap protected"
+    elif float(assessment.get("current_stock", 0) or 0) <= 0:
+        impact = "0 stock"
+    else:
+        impact = "—"
+
+    drivers = assessment.get("drivers") or []
+
+    reason_items = []
+    for driver in drivers[:3]:
+        label = str(driver.get("label") or "Review required")
+        evidence = _driver_evidence(driver)
+
+        reason_items.append(
+            html.Li(
+                [
+                    html.Strong(f"{label}: "),
+                    html.Span(evidence),
+                ]
+            )
+        )
+
+    if not reason_items:
+        reason_items = [html.Li("Review required")]
+
+    recommendation = str(
+        assessment.get("recommendation")
+        or "Review the SKU assessment and underlying replenishment assumptions."
+    )
+
+    quality_flags = assessment.get("data_quality_flags") or []
+
+    badges = [
+        html.Span(
+            sku_type.replace("_", " ").title(),
+            className="selection-badge",
+        )
+    ]
+
+    if quality_flags:
+        badges.append(
+            html.Span(
+                "Data quality flag",
+                className="selection-badge selection-badge-warning",
+            )
+        )
+
     return html.Div(
         [
             html.Div(
                 [
                     html.Div("Selected SKU", className="selection-eyebrow"),
-                    html.H3(str(row.get("sku_id", "Unknown")), className="selection-title"),
+                    html.H3(sku_id, className="selection-title"),
+                    html.Div(badges, className="selection-badges"),
                 ],
                 className="selection-heading",
             ),
+
             html.Div(
                 [
-                    html.Div([html.Span("Risk", className="selection-label"), html.Strong(str(row.get("risk_state", "—")))], className="selection-item"),
-                    html.Div([html.Span("Stock", className="selection-label"), html.Strong(str(row.get("current_stock_display", "—")))], className="selection-item"),
-                    html.Div([html.Span("Coverage", className="selection-label"), html.Strong(str(row.get("coverage_display", "—")))], className="selection-item"),
-                    html.Div([html.Span("Priority", className="selection-label"), html.Strong(str(row.get("priority", "—")))], className="selection-item"),
+                    html.Div(
+                        [
+                            html.Span("Risk", className="selection-label"),
+                            html.Strong(risk),
+                        ],
+                        className="selection-item",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Priority", className="selection-label"),
+                            html.Strong(priority),
+                        ],
+                        className="selection-item",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Stock", className="selection-label"),
+                            html.Strong(current_stock),
+                        ],
+                        className="selection-item",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Coverage", className="selection-label"),
+                            html.Strong(coverage),
+                        ],
+                        className="selection-item",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Lead time", className="selection-label"),
+                            html.Strong(lead_display),
+                        ],
+                        className="selection-item",
+                    ),
+                    html.Div(
+                        [
+                            html.Span("Expected delivery", className="selection-label"),
+                            html.Strong(delivery),
+                        ],
+                        className="selection-item",
+                    ),
                 ],
                 className="selection-grid",
             ),
+
             html.Div(
                 [
-                    html.Strong("Why"),
-                    html.P(str(row.get("reason", "Review required"))),
+                    html.Strong("Projected impact"),
+                    html.P(impact),
                 ],
                 className="selection-reason",
             ),
-            html.Div("SKU Analysis drilldown will be connected in the next milestone.", className="selection-next"),
+
+            html.Div(
+                [
+                    html.Strong("Why this needs attention"),
+                    html.Ul(reason_items),
+                ],
+                className="selection-reason",
+            ),
+
+            html.Div(
+                [
+                    html.Strong("What to investigate"),
+                    html.P(recommendation),
+                ],
+                className="selection-reason selection-recommendation",
+            ),
         ],
         className="selection-card",
     )

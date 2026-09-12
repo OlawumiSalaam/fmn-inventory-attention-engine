@@ -112,6 +112,44 @@ class ValidationResponse(BaseModel):
     risk: RiskValidationResponse
 
 
+class AIExplanationResponse(BaseModel):
+    """Grounded natural language explanation for one SKU."""
+
+    sku_id: str
+    explanation: str | None = None
+    grounding_passed: bool
+    attempts: int
+    provider: str | None = None
+    model: str | None = None
+    latency_ms: int | None = None
+    error: str | None = None
+
+
+class AskRequest(BaseModel):
+    """Natural language question submitted to Ask the Data."""
+
+    question: str = Field(min_length=1, max_length=1000)
+
+
+class ToolCallResponse(BaseModel):
+    """Record of one deterministic tool used to answer a question."""
+
+    name: str
+    arguments: dict[str, Any]
+    result: Any
+
+
+class AskResponse(BaseModel):
+    """Grounded response to a planner question."""
+
+    answer: str | None = None
+    grounding_passed: bool
+    tool_calls: list[ToolCallResponse] = Field(default_factory=list)
+    provider: str | None = None
+    model: str | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     """API health response."""
 

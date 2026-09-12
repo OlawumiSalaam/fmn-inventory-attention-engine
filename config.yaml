@@ -1,0 +1,16 @@
+llm:
+  timeout_seconds: 30
+  max_retries: 1
+
+  providers:
+    - name: groq
+      base_url: https://api.groq.com/openai/v1
+      model: openai/gpt-oss-120b
+      api_key_name: GROQ_API_KEY
+      temperature: 0.2
+
+    - name: gemini
+      base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+      model: gemini-3.6-flash
+      api_key_name: GEMINI_API_KEY
+      temperature: null
