@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,17 @@ ROOT = Path(__file__).resolve().parent
 DF = pd.read_csv(ROOT / "data/processed/clean_daily_data.csv", parse_dates=["date"]).sort_values(["sku_id", "date"])
 RISK = pd.read_csv(ROOT / "artifacts/evaluation/risk_current_assessment.csv")
 ORIGIN = DF["date"].max()
+
+
+def _lead_times_differ(lead_time_range: object) -> bool:
+    """True when a SKU records more than one lead time, for example '3-14 days'.
+
+    Compares the numbers rather than looking for a dash, so a consistent range
+    such as '3-3 days' is not flagged as inconsistent.
+    """
+    numbers = re.findall(r"\d+", str(lead_time_range or ""))
+    return len(numbers) >= 2 and len(set(numbers)) > 1
+
 
 rows = []
 for sku_id, g in DF.groupby("sku_id", sort=True):
@@ -113,7 +125,7 @@ base = pd.DataFrame(rows)
 # Build deterministic, evidence carrying drivers before serialising the canonical contract.
 base["history_days"] = base["sku_id"].map(DF.groupby("sku_id")["date"].nunique()).fillna(0).astype(int)
 base["data_quality_flags"] = base.apply(lambda r: [x for x in [
-    "lead_time_inconsistent" if "–" in str(r.get("lead_time_range_days", "")) else None,
+    "lead_time_inconsistent" if _lead_times_differ(r.get("lead_time_range_days")) else None,
     "limited_history" if r["sku_status"] == "new" else None,
 ] if x], axis=1)
 
@@ -130,16 +142,8 @@ def _derive_driver_labels(row: pd.Series) -> list[str]:
         labels.append("Short stock coverage")
     if float(row.get("uncertainty_daily", 0)) > 0 and "Forecast uncertainty" not in labels:
         labels.append("Forecast uncertainty")
-    lead_range = str(row.get("lead_time_range_days", ""))
-    if "–" in lead_range:
-        parts = lead_range.split("–", 1)
-        try:
-            lead_min = float(parts[0].strip())
-            lead_max = float(parts[1].split()[0].strip())
-        except (ValueError, IndexError):
-            lead_min = lead_max = float("nan")
-        if pd.notna(lead_min) and pd.notna(lead_max) and lead_min != lead_max and "Lead time inconsistency" not in labels:
-            labels.append("Lead time inconsistency")
+    if _lead_times_differ(row.get("lead_time_range_days")) and "Lead time inconsistency" not in labels:
+        labels.append("Lead time inconsistency")
     if row.get("sku_status") == "new" and "Limited SKU history" not in labels:
         labels.append("Limited SKU history")
     expected = row.get("expected_delivery_date")
