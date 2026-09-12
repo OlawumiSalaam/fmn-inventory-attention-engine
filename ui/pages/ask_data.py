@@ -60,8 +60,9 @@ def _answer_card(
                 ),
                 html.P(
                     (
-                        "No answer was returned. "
-                        "Please try another question."
+                        "The answer could not be verified against the "
+                        "assessment data, so it was not shown. "
+                        "Please try rephrasing your question."
                     )
                 ),
             ],
@@ -106,7 +107,7 @@ def _answer_card(
             ],
             className="ai-explanation-header",
         ),
-        html.P(
+       dcc.Markdown(
             str(answer),
             className="qa-answer-text",
         ),

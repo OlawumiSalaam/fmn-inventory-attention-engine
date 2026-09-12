@@ -336,7 +336,7 @@ def _ai_explanation_card(
                 ],
                 className="ai-explanation-header",
             ),
-            html.P(
+            dcc.Markdown(
                 str(text),
                 className="ai-explanation-text",
             ),
